@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI MEDIA SERVICE — Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080c10;--bg2:#0d1117;--bg3:#111820;--bg4:#161e28;
+  --border:#1e2d3d;--border2:#253545;
+  --accent:#00d488;--accent-dim:#00a86b;--accent-glow:rgba(0,212,136,0.15);
+  --blue:#4f9eff;--blue-dim:#3a7fd4;
+  --warn:#f5a623;--danger:#f44336;--purple:#9b59b6;
+  --text:#c9d1d9;--text2:#8b949e;--text3:#4a5568;
+  --green:#3fb950;--red:#f85149;--yellow:#d29922;
+}
+body{background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ── HEADER ── */
+.header{display:flex;justify-content:space-between;align-items:center;
+  padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100}
+.header-left{display:flex;align-items:center;gap:14px}
+.header-logo{width:36px;height:36px;background:var(--accent);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:bold;color:#000}
+.header-title{font-size:15px;font-weight:bold;color:var(--text);letter-spacing:1px}
+.header-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.header-right{display:flex;align-items:center;gap:20px}
+.clock{font-size:22px;font-weight:bold;color:var(--accent);font-variant-numeric:tabular-nums}
+.clock-date{font-size:11px;color:var(--text2);text-align:right;margin-top:2px}
+.live-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;
+  animation:pulse 2s infinite;display:inline-block;margin-right:6px}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,212,136,0.4)}50%{opacity:.7;box-shadow:0 0 0 6px rgba(0,212,136,0)}}
+
+/* ── STATS BAR ── */
+.stats-bar{display:flex;gap:12px;padding:16px 24px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 18px;min-width:130px}
+.stat-num{font-size:26px;font-weight:bold;color:var(--accent)}
+.stat-num.blue{color:var(--blue)}
+.stat-num.warn{color:var(--warn)}
+.stat-num.red{color:var(--red)}
+.stat-label{font-size:10px;color:var(--text3);margin-top:3px;text-transform:uppercase;letter-spacing:.5px}
+.stat-bar-fill{height:3px;background:var(--border2);border-radius:2px;margin-top:8px;overflow:hidden}
+.stat-bar-inner{height:100%;background:var(--accent);border-radius:2px;transition:width .5s}
+
+/* ── SECTION HEADER ── */
+.section{padding:20px 24px 8px}
+.section-hdr{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.section-dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.section-title{font-size:12px;font-weight:bold;color:var(--text2);letter-spacing:2px;text-transform:uppercase}
+.section-count{background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  font-size:11px;color:var(--text3);padding:1px 8px}
+
+/* ── TEAM ── */
+.team-grid{display:flex;gap:12px;flex-wrap:wrap;padding:0 24px 20px}
+.agent-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  padding:14px;width:190px;position:relative;cursor:default;transition:border-color .2s}
+.agent-card:hover{border-color:var(--border2)}
+.agent-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-glow)}
+.agent-status{position:absolute;top:12px;right:12px;width:8px;height:8px;border-radius:50%;background:var(--text3)}
+.agent-status.online{background:var(--accent);animation:pulse 2s infinite}
+.agent-status.busy{background:var(--warn)}
+.agent-icon{font-size:22px;margin-bottom:8px}
+.agent-name{font-size:13px;font-weight:bold;color:var(--text)}
+.agent-role{font-size:10px;color:var(--text3);margin-top:3px;text-transform:uppercase;letter-spacing:.5px}
+.agent-model{font-size:10px;color:var(--blue);margin-top:6px}
+.agent-action{font-size:11px;color:var(--text2);margin-top:6px;min-height:32px;
+  background:var(--bg4);border-radius:5px;padding:4px 7px}
+
+/* ── KANBAN ── */
+.kanban{display:flex;gap:14px;padding:0 24px 24px;overflow-x:auto;min-height:400px}
+.kanban-col{background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  min-width:260px;max-width:280px;flex-shrink:0;display:flex;flex-direction:column}
+.kanban-col-hdr{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.kanban-col-title{font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1.5px;display:flex;align-items:center;gap:8px}
+.col-dot{width:8px;height:8px;border-radius:50%}
+.kanban-badge{background:var(--bg4);border:1px solid var(--border);border-radius:10px;
+  font-size:11px;color:var(--text3);padding:1px 8px}
+.kanban-body{padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;max-height:480px}
+
+/* ── CONTENT CARD ── */
+.content-card{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:border-color .2s}
+.content-card:hover{border-color:var(--border2)}
+.content-card-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.tag{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}
+.tag-ai{background:rgba(79,158,255,.15);color:var(--blue);border:1px solid rgba(79,158,255,.25)}
+.tag-pb{background:rgba(155,89,182,.15);color:var(--purple);border:1px solid rgba(155,89,182,.25)}
+.tag-fin{background:rgba(245,166,35,.15);color:var(--warn);border:1px solid rgba(245,166,35,.25)}
+.tag-qa{background:rgba(0,212,136,.1);color:var(--accent);border:1px solid rgba(0,212,136,.2)}
+.content-card-title{font-size:12px;color:var(--text);font-weight:bold;margin-bottom:6px;line-height:1.4}
+.content-card-meta{font-size:10px;color:var(--text3);display:flex;gap:8px;flex-wrap:wrap}
+.content-card-actions{display:flex;gap:6px;margin-top:10px}
+.btn{font-family:'Manrope',sans-serif;font-size:11px;padding:4px 12px;border:none;border-radius:5px;cursor:pointer;font-weight:bold;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-green{background:var(--accent);color:#000}
+.btn-red{background:var(--danger);color:#fff}
+.btn-blue{background:var(--blue);color:#000}
+.btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.content-card-preview{font-size:10px;color:var(--text3);margin-top:6px;line-height:1.5;max-height:50px;overflow:hidden}
+
+/* ── TASK LOG ── */
+.task-log{padding:0 24px 30px}
+.task-row{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--bg3);
+  border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px}
+.task-row:hover{border-color:var(--border2)}
+.task-agent{color:var(--accent);font-weight:bold;min-width:180px;flex-shrink:0}
+.task-desc{color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.task-week{color:var(--text3);font-size:10px;min-width:50px}
+.badge{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:bold}
+.badge-completed{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.2)}
+.badge-pending{background:rgba(210,153,34,.15);color:var(--yellow);border:1px solid rgba(210,153,34,.2)}
+.badge-failed{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.2)}
+
+/* ── MODAL ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;overflow-y:auto}
+.overlay.open{display:flex;align-items:flex-start;justify-content:center;padding:40px 20px}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:740px;padding:28px}
+.modal-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
+.modal-title{font-size:16px;font-weight:bold;color:var(--text)}
+.modal-close{background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:0 4px;line-height:1}
+.modal-close:hover{color:var(--text)}
+.modal-section{margin-bottom:18px}
+.modal-section-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px}
+.modal-content{font-size:12px;color:var(--text2);line-height:1.7;white-space:pre-wrap;background:var(--bg3);
+  border-radius:6px;padding:12px;max-height:250px;overflow-y:auto}
+.modal-posts{display:flex;flex-direction:column;gap:8px}
+.post-item{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;color:var(--text2);line-height:1.6}
+.modal-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--text3)}
+.modal-meta span{background:var(--bg3);padding:3px 10px;border-radius:4px;border:1px solid var(--border)}
+.modal-actions{display:flex;gap:10px;margin-top:20px}
+
+/* ── NICHE COLORS ── */
+.niche-ai_business{--nc:var(--blue)}
+.niche-personal_brand{--nc:var(--purple)}
+.niche-finance{--nc:var(--warn)}
+
+/* ── RATE LIMIT WIDGET ── */
+.rl-widget{background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+  padding:12px 18px;min-width:220px;position:relative;overflow:hidden}
+.rl-widget.status-limited{border-color:var(--warn);box-shadow:0 0 0 1px rgba(245,166,35,.15)}
+.rl-widget.status-ok{border-color:rgba(63,185,80,.3)}
+.rl-widget.status-unknown{border-color:var(--border)}
+.rl-row{display:flex;align-items:center;gap:8px}
+.rl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.rl-dot.ok{background:var(--green)}
+.rl-dot.limited{background:var(--warn);animation:pulse 1.5s infinite}
+.rl-dot.unknown{background:var(--text3)}
+.rl-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+.rl-status-text{font-size:13px;font-weight:700;color:var(--text)}
+.rl-status-text.ok{color:var(--green)}
+.rl-status-text.limited{color:var(--warn)}
+.rl-timer{font-size:22px;font-weight:800;color:var(--warn);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.rl-agent{font-size:10px;color:var(--text2);margin-top:4px}
+.rl-bar{height:3px;background:var(--border2);border-radius:2px;margin-top:8px;overflow:hidden}
+.rl-bar-inner{height:100%;border-radius:2px;transition:width 1s linear}
+.rl-bar-inner.ok{background:var(--green)}
+.rl-bar-inner.limited{background:var(--warn)}
+
+/* ── EMPTY STATE ── */
+.empty{color:var(--text3);font-size:12px;padding:20px;text-align:center}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">AI</div>
+    <div>
+      <div class="header-title"><span class="live-dot"></span>AI MEDIA SERVICE</div>
+      <div class="header-sub">COMMAND CENTER v1.0</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div style="text-align:right">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="clock-date" id="clock-date">--</div>
+    </div>
+    <button class="btn btn-ghost" onclick="refreshAll()" style="font-size:11px">↺ Обновить</button>
+  </div>
+</div>
+
+<!-- STATS BAR -->
+<div class="stats-bar" id="stats-bar">
+  <div class="stat-card"><div class="stat-num" id="s-total">—</div><div class="stat-label">Всего контента</div></div>
+  <div class="stat-card"><div class="stat-num warn" id="s-pending">—</div><div class="stat-label">На проверке</div></div>
+  <div class="stat-card"><div class="stat-num blue" id="s-approved">—</div><div class="stat-label">Одобрено</div></div>
+  <div class="stat-card"><div class="stat-num red" id="s-rejected">—</div><div class="stat-label">Отклонено</div></div>
+  <div class="stat-card"><div class="stat-num" id="s-tasks">—</div><div class="stat-label">Задач агентов</div></div>
+  <div class="stat-card"><div class="stat-num blue" id="s-week">—</div><div class="stat-label">Текущая неделя</div></div>
+
+  <!-- Groq rate-limit -->
+  <div class="rl-widget status-unknown" id="rl-groq">
+    <div class="rl-row">
+      <div class="rl-dot unknown" id="rl-groq-dot"></div>
+      <div>
+        <div class="rl-status-text" id="rl-groq-txt">Groq API</div>
+        <div id="rl-groq-timer-wrap" style="display:none">
+          <div class="rl-timer" id="rl-groq-timer">--:--</div>
+        </div>
+      </div>
+    </div>
+    <div class="rl-agent" id="rl-groq-agent">ChiefAgent · 100K/день</div>
+    <div class="rl-bar"><div class="rl-bar-inner unknown" id="rl-groq-bar" style="width:0%"></div></div>
+    <div class="rl-label">Groq · llama-3.3-70b</div>
+  </div>
+
+  <!-- Google rate-limit -->
+  <div class="rl-widget status-unknown" id="rl-google">
+    <div class="rl-row">
+      <div class="rl-dot unknown" id="rl-google-dot"></div>
+      <div>
+        <div class="rl-status-text" id="rl-google-txt">Google API</div>
+        <div id="rl-google-timer-wrap" style="display:none">
+          <div class="rl-timer" id="rl-google-timer">--:--</div>
+        </div>
+      </div>
+    </div>
+    <div class="rl-agent" id="rl-google-agent">Субагенты · 1M/день</div>
+    <div class="rl-bar"><div class="rl-bar-inner unknown" id="rl-google-bar" style="width:0%"></div></div>
+    <div class="rl-label">Gemini 2.0 Flash · FREE</div>
+  </div>
+</div>
+
+<!-- TEAM -->
+<div class="section">
+  <div class="section-hdr">
+    <div class="section-dot"></div>
+    <div class="section-title">Команда агентов</div>
+  </div>
+</div>
+<div class="team-grid" id="team-grid">
+  <div class="agent-card active">
+    <div class="agent-status online"></div>
+    <div class="agent-icon">🧠</div>
+    <div class="agent-name">ChiefAgent</div>
+    <div class="agent-role">ГЛАВНЫЙ · ОРКЕСТРАТОР</div>
+    <div class="agent-model" style="color:var(--warn)">Groq · llama-3.3-70b</div>
+    <div class="agent-action" id="chief-action">Координирует агентов</div>
+  </div>
+  <div class="agent-card">
+    <div class="agent-status" id="st-niche"></div>
+    <div class="agent-icon">🔍</div>
+    <div class="agent-name">NicheAnalyst</div>
+    <div class="agent-role">АНАЛИЗ · ТРЕНДЫ</div>
+    <div class="agent-model" style="color:#4ade80">Gemini 2.0 Flash</div>
+    <div class="agent-action" id="act-niche">Ожидает</div>
+  </div>
+  <div class="agent-card">
+    <div class="agent-status" id="st-strategy"></div>
+    <div class="agent-icon">📋</div>
+    <div class="agent-name">ContentStrategy</div>
+    <div class="agent-role">ПЛАНИРОВАНИЕ · КОНТЕНТ</div>
+    <div class="agent-model" style="color:#4ade80">Gemini 2.0 Flash</div>
+    <div class="agent-action" id="act-strategy">Ожидает</div>
+  </div>
+  <div class="agent-card">
+    <div class="agent-status" id="st-gen"></div>
+    <div class="agent-icon">✍️</div>
+    <div class="agent-name">ContentGenerator</div>
+    <div class="agent-role">КОНТЕНТ · СЦЕНАРИИ</div>
+    <div class="agent-model" style="color:#4ade80">Gemini 2.0 Flash</div>
+    <div class="agent-action" id="act-gen">Ожидает</div>
+  </div>
+  <div class="agent-card">
+    <div class="agent-status" id="st-qa"></div>
+    <div class="agent-icon">🛡️</div>
+    <div class="agent-name">QABrandSafety</div>
+    <div class="agent-role">КОНТРОЛЬ КАЧЕСТВА</div>
+    <div class="agent-model" style="color:#4ade80">Gemini 2.0 Flash</div>
+    <div class="agent-action" id="act-qa">Ожидает</div>
+  </div>
+  <div class="agent-card">
+    <div class="agent-status" id="st-metrics"></div>
+    <div class="agent-icon">📊</div>
+    <div class="agent-name">GrowthMetrics</div>
+    <div class="agent-role">АНАЛИТИКА · РОСТ</div>
+    <div class="agent-model" style="color:#4ade80">Gemini 2.0 Flash</div>
+    <div class="agent-action" id="act-metrics">Ожидает</div>
+  </div>
+  <div class="agent-card">
+    <div class="agent-status" id="st-seo"></div>
+    <div class="agent-icon">🔎</div>
+    <div class="agent-name">SeoAgent</div>
+    <div class="agent-role">SEO · КЛЮЧЕВЫЕ СЛОВА</div>
+    <div class="agent-model" style="color:#4ade80">Gemini 2.0 Flash</div>
+    <div class="agent-action" id="act-seo">Ожидает</div>
+  </div>
+</div>
+
+<!-- KANBAN -->
+<div class="section">
+  <div class="section-hdr">
+    <div class="section-dot" style="background:var(--blue)"></div>
+    <div class="section-title">Контент — Канбан</div>
+  </div>
+</div>
+<div class="kanban" id="kanban">
+  <div class="kanban-col">
+    <div class="kanban-col-hdr">
+      <div class="kanban-col-title"><div class="col-dot" style="background:var(--warn)"></div>НА ПРОВЕРКЕ</div>
+      <div class="kanban-badge" id="cnt-pending">0</div>
+    </div>
+    <div class="kanban-body" id="col-pending"></div>
+  </div>
+  <div class="kanban-col">
+    <div class="kanban-col-hdr">
+      <div class="kanban-col-title"><div class="col-dot" style="background:var(--accent)"></div>ОДОБРЕНО</div>
+      <div class="kanban-badge" id="cnt-approved">0</div>
+    </div>
+    <div class="kanban-body" id="col-approved"></div>
+  </div>
+  <div class="kanban-col">
+    <div class="kanban-col-hdr">
+      <div class="kanban-col-title"><div class="col-dot" style="background:var(--red)"></div>ОТКЛОНЕНО</div>
+      <div class="kanban-badge" id="cnt-rejected">0</div>
+    </div>
+    <div class="kanban-body" id="col-rejected"></div>
+  </div>
+</div>
+
+<!-- TASK LOG -->
+<div class="section">
+  <div class="section-hdr">
+    <div class="section-dot" style="background:var(--purple)"></div>
+    <div class="section-title">Лог задач агентов</div>
+  </div>
+</div>
+<div class="task-log" id="task-log">
+  <div class="empty">Загрузка...</div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-box">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title" id="modal-title">—</div>
+        <div class="modal-meta" id="modal-meta" style="margin-top:8px"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div id="modal-body"></div>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<script>
+const NICHES = {ai_business:'Нейро Бизнес',personal_brand:'Виден всем',finance:'Деньги просто'};
+const NICHE_TAGS = {ai_business:'tag-ai',personal_brand:'tag-pb',finance:'tag-fin'};
+const AGENT_KEYS = {
+  NicheAnalystAgent:'niche',ContentStrategyAgent:'strategy',
+  ContentGeneratorAgent:'gen',QABrandSafetyAgent:'qa',
+  GrowthMetricsAgent:'metrics',SeoAgent:'seo'
+};
+let currentId = null;
+let allContent = [];
+
+// ── Clock ──
+function updateClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('ru-RU',{hour12:false});
+  document.getElementById('clock-date').textContent =
+    now.toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'});
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── Fetch ──
+async function api(url){const r=await fetch(url);return r.json();}
+
+function nicheTag(key){
+  return `<span class="tag ${NICHE_TAGS[key]||'tag-qa'}">${NICHES[key]||key}</span>`;
+}
+function timeAgo(str){
+  if(!str)return'';
+  const d=new Date(str);const s=Math.floor((Date.now()-d)/1000);
+  if(s<60)return s+'с назад';if(s<3600)return Math.floor(s/60)+'м назад';
+  if(s<86400)return Math.floor(s/3600)+'ч назад';return Math.floor(s/86400)+'д назад';
+}
+
+// ── Stats ──
+async function loadStats(){
+  const c = await api('/api/content?limit=200');
+  allContent = c;
+  const pending=c.filter(x=>x.qa_status==='pending').length;
+  const approved=c.filter(x=>x.qa_status==='approved').length;
+  const rejected=c.filter(x=>x.qa_status==='rejected').length;
+  document.getElementById('s-total').textContent=c.length;
+  document.getElementById('s-pending').textContent=pending;
+  document.getElementById('s-approved').textContent=approved;
+  document.getElementById('s-rejected').textContent=rejected;
+}
+
+async function loadTasks(){
+  const tasks = await api('/api/tasks?limit=100');
+  document.getElementById('s-tasks').textContent=tasks.length;
+
+  // Update agent cards from latest task per agent
+  const latest={};
+  for(const t of tasks){if(!latest[t.assigned_to])latest[t.assigned_to]=t;}
+  for(const [agentName,key] of Object.entries(AGENT_KEYS)){
+    const t=latest[agentName];
+    const actEl=document.getElementById('act-'+key);
+    const stEl=document.getElementById('st-'+key);
+    if(t){
+      const preview=(t.result_preview||t.task||'').substring(0,60);
+      if(actEl)actEl.textContent=preview||'Выполнено';
+      if(stEl){stEl.className='agent-status';stEl.classList.add(t.status==='completed'?'online':'busy');}
+    }
+  }
+
+  // Find max week
+  const maxWeek=tasks.reduce((m,t)=>Math.max(m,t.week||0),0);
+  document.getElementById('s-week').textContent=maxWeek||'—';
+
+  // Task log
+  const log=document.getElementById('task-log');
+  if(!tasks.length){log.innerHTML='<div class="empty">Нет задач.</div>';return;}
+  log.innerHTML=tasks.slice(0,40).map(t=>`
+    <div class="task-row">
+      <div class="task-week">Нед ${t.week||'?'}</div>
+      <div class="task-agent">${t.assigned_to}</div>
+      <div class="task-desc" title="${escHtml(t.task)}">${escHtml(t.task)}</div>
+      <div class="badge badge-${t.status}">${t.status}</div>
+    </div>`).join('');
+}
+
+// ── Kanban ──
+function buildCard(c, showActions){
+  const statusTime=timeAgo(c.created_at);
+  const posts=Array.isArray(c.telegram_posts)?c.telegram_posts.length:0;
+  return `<div class="content-card" onclick="openModal(${c.id})">
+    <div class="content-card-tags">
+      ${nicheTag(c.niche_key)}
+      <span class="tag tag-qa">Wk ${c.week||'?'}</span>
+    </div>
+    <div class="content-card-title">${escHtml((c.topic||'').substring(0,70))}</div>
+    <div class="content-card-preview">${escHtml((c.article_preview||'').substring(0,100))}…</div>
+    <div class="content-card-meta">
+      <span>📝 ${posts} постов</span>
+      <span>🎬 ${c.shorts_count||0} шортс</span>
+      <span>${statusTime}</span>
+    </div>
+    ${showActions?`<div class="content-card-actions" onclick="event.stopPropagation()">
+      <button class="btn btn-green" onclick="doApprove(${c.id})">✅ Одобрить</button>
+      <button class="btn btn-red" onclick="doReject(${c.id})">❌ Откл.</button>
+    </div>`:''}
+  </div>`;
+}
+
+async function loadKanban(){
+  const c = allContent.length ? allContent : await api('/api/content?limit=200');
+  allContent = c;
+  const byStatus={pending:[],approved:[],rejected:[]};
+  for(const item of c){
+    if(byStatus[item.qa_status])byStatus[item.qa_status].push(item);
+  }
+  const cols=['pending','approved','rejected'];
+  const showAct=[true,false,false];
+  cols.forEach((st,i)=>{
+    const col=document.getElementById('col-'+st);
+    const cnt=document.getElementById('cnt-'+st);
+    cnt.textContent=byStatus[st].length;
+    col.innerHTML=byStatus[st].length
+      ?byStatus[st].map(c=>buildCard(c,showAct[i])).join('')
+      :'<div class="empty">Пусто</div>';
+  });
+}
+
+// ── Modal ──
+function openModal(id){
+  const c=allContent.find(x=>x.id===id);
+  if(!c)return;
+  currentId=id;
+  document.getElementById('modal-title').textContent=c.topic||'Без названия';
+  document.getElementById('modal-meta').innerHTML=`
+    <span>${nicheTag(c.niche_key)}</span>
+    <span>ID: ${c.id}</span>
+    <span>Статус: ${c.qa_status}</span>
+    <span>${timeAgo(c.created_at)}</span>`;
+  const posts=Array.isArray(c.telegram_posts)?c.telegram_posts:[];
+  document.getElementById('modal-body').innerHTML=`
+    <div class="modal-section">
+      <div class="modal-section-title">📰 Статья (превью)</div>
+      <div class="modal-content">${escHtml(c.article_preview||'—')}</div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">📱 Telegram посты (${posts.length})</div>
+      <div class="modal-posts">${posts.length
+        ?posts.map((p,i)=>`<div class="post-item"><b>Пост ${i+1}:</b>\n${escHtml(p.substring(0,300))}${p.length>300?'…':''}</div>`).join('')
+        :'<div class="empty">Нет постов</div>'
+      }</div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">🎬 Шортс сценарии: ${c.shorts_count||0}</div>
+    </div>`;
+  const actions=document.getElementById('modal-actions');
+  if(c.qa_status==='pending'){
+    actions.innerHTML=`
+      <button class="btn btn-green" onclick="doApprove(${id});closeModal()">✅ Одобрить и опубликовать</button>
+      <button class="btn btn-red" onclick="doReject(${id});closeModal()">❌ Отклонить</button>`;
+  } else {
+    actions.innerHTML=`<span style="font-size:11px;color:var(--text3)">Статус: ${c.qa_status}</span>`;
+  }
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(e){
+  if(e&&e.target!==document.getElementById('modal-overlay'))return;
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ── Actions ──
+async function doApprove(id){
+  await fetch(`/api/content/${id}/approve`,{method:'POST'});
+  await refreshAll();
+}
+async function doReject(id){
+  await fetch(`/api/content/${id}/reject`,{method:'POST'});
+  await refreshAll();
+}
+
+// ── Utils ──
+function escHtml(s){
+  if(!s)return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Rate Limit Widgets ──
+const _rlTimers = {};
+
+function _renderRlWidget(prefix, label, data){
+  const widget    = document.getElementById(`rl-${prefix}`);
+  const dot       = document.getElementById(`rl-${prefix}-dot`);
+  const txt       = document.getElementById(`rl-${prefix}-txt`);
+  const timerWrap = document.getElementById(`rl-${prefix}-timer-wrap`);
+  const timerEl   = document.getElementById(`rl-${prefix}-timer`);
+  const barEl     = document.getElementById(`rl-${prefix}-bar`);
+
+  if(_rlTimers[prefix]){ clearInterval(_rlTimers[prefix]); delete _rlTimers[prefix]; }
+
+  if(data && data.status === 'limited'){
+    const resetAt = data.reset_at;
+    const total   = data.wait_seconds || 60;
+    widget.className = 'rl-widget status-limited';
+    dot.className    = 'rl-dot limited';
+    txt.className    = 'rl-status-text limited';
+    txt.textContent  = '⚠️ Лимит';
+    timerWrap.style.display = '';
+    const tick = ()=>{
+      const left = Math.max(0, resetAt - Math.floor(Date.now()/1000));
+      timerEl.textContent = `${String(Math.floor(left/60)).padStart(2,'0')}:${String(left%60).padStart(2,'0')}`;
+      barEl.style.width = Math.min(100,(((total-left)/total)*100))+'%';
+      barEl.className = 'rl-bar-inner limited';
+      if(left===0){ clearInterval(_rlTimers[prefix]); delete _rlTimers[prefix]; loadRateLimit(); }
+    };
+    tick();
+    _rlTimers[prefix] = setInterval(tick, 1000);
+  } else if(data && data.status === 'ok'){
+    widget.className = 'rl-widget status-ok';
+    dot.className    = 'rl-dot ok';
+    txt.className    = 'rl-status-text ok';
+    txt.textContent  = '✅ Доступен';
+    timerWrap.style.display = 'none';
+    barEl.style.width = '100%';
+    barEl.className = 'rl-bar-inner ok';
+  } else {
+    widget.className = 'rl-widget status-unknown';
+    dot.className    = 'rl-dot unknown';
+    txt.className    = 'rl-status-text';
+    txt.textContent  = label;
+    timerWrap.style.display = 'none';
+    barEl.style.width = '0%';
+  }
+}
+
+async function loadRateLimit(){
+  let all;
+  try { all = await api('/api/rate-limit'); } catch(e){ return; }
+  _renderRlWidget('groq',   'Groq API',   all.groq);
+  _renderRlWidget('google', 'Google API', all.google);
+}
+
+// ── Refresh ──
+async function refreshAll(){
+  await loadStats();
+  await Promise.all([loadKanban(), loadTasks(), loadRateLimit()]);
+}
+
+refreshAll();
+setInterval(refreshAll, 30000);
+</script>
+</body>
+</html>

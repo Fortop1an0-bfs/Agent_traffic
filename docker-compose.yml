@@ -1,0 +1,131 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agent_traffic_pg
+    environment:
+      POSTGRES_DB: agent_traffic
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent_traffic"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: agent_traffic_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    container_name: agent_traffic_app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://agent:secret@postgres:5432/agent_traffic
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    command: python -m src.ai_media_service.cli
+
+  # Web dashboard — http://localhost:8000
+  dashboard:
+    build: .
+    container_name: agent_traffic_dashboard
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://agent:secret@postgres:5432/agent_traffic
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    command: uvicorn src.ai_media_service.dashboard.app:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  # Telegram bot listener — handles Approve/Reject callbacks from admin
+  telegram_bot:
+    build: .
+    container_name: agent_traffic_tgbot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://agent:secret@postgres:5432/agent_traffic
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    command: python -m src.ai_media_service.integrations.telegram_bot
+    restart: unless-stopped
+
+  # Celery worker — executes agent tasks
+  celery_worker:
+    build: .
+    container_name: agent_traffic_worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://agent:secret@postgres:5432/agent_traffic
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    command: celery -A src.ai_media_service.worker worker --loglevel=info --concurrency=2
+    restart: unless-stopped
+
+  # Celery beat — sends weekly task to queue every Monday 09:00
+  celery_beat:
+    build: .
+    container_name: agent_traffic_beat
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://agent:secret@postgres:5432/agent_traffic
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    command: celery -A src.ai_media_service.worker beat --loglevel=info
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
