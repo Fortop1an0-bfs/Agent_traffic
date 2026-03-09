@@ -16,6 +16,7 @@ from ..config import settings
 from ..database import get_session
 from ..db_models import AgentTaskDB, ContentItemDB, WeeklyDecisionDB
 from ..redis_client import cache_agent_result, enqueue_task, set_rate_limit_hit, set_rate_limit_ok
+from .base import _parse_wait
 from ..integrations.telegram_bot import notify_admin
 from .sub_agents import (
     ContentGeneratorAgent,
@@ -220,9 +221,17 @@ def _save_content_item(session: Any, args: dict[str, Any], raw: str) -> None:
 
 class ChiefAgent:
     """
-    Chief agent that uses Grok function-calling to delegate work to sub-agents.
-    Runs an agentic loop: plan → delegate → collect → synthesize.
+    Chief agent: agentic loop с function calling.
+    Провайдеры: Groq → Gemini → Mistral (мгновенный переход на 429, без sleep).
+    Sleep только если все провайдеры исчерпаны.
     """
+
+    # Цепочка провайдеров для ChiefAgent (все поддерживают function calling)
+    _PROVIDER_CHAIN = [
+        ("groq",    "GROK_API_KEY",    "GROK_BASE_URL",    "GROK_MODEL"),
+        ("google",  "GOOGLE_API_KEY",  "GOOGLE_BASE_URL",  "GOOGLE_MODEL"),
+        ("mistral", "MISTRAL_API_KEY", "MISTRAL_BASE_URL", "MISTRAL_MODEL"),
+    ]
 
     SYSTEM_PROMPT = (
         "Ты ChiefAgentOrchestrator — главный координатор AI-медиасервиса для российского рынка. "
@@ -243,92 +252,109 @@ class ChiefAgent:
     )
 
     def __init__(self) -> None:
-        self.client = OpenAI(
-            api_key=settings.GROK_API_KEY,
-            base_url=settings.GROK_BASE_URL,
-        )
+        # Собираем список провайдеров у которых есть ключ
+        self._providers: list[tuple[str, str, str, str]] = []
+        for pname, key_attr, url_attr, model_attr in self._PROVIDER_CHAIN:
+            key = getattr(settings, key_attr, "")
+            if key:
+                self._providers.append((
+                    pname, key,
+                    getattr(settings, url_attr, ""),
+                    getattr(settings, model_attr, ""),
+                ))
 
-    def run_week(self, week: int, niche_key: str, business_goals: list[str]) -> str:
+    def _try_provider(
+        self,
+        provider_name: str,
+        api_key: str,
+        base_url: str,
+        model: str,
+        initial_messages: list[ChatCompletionMessageParam],
+        week: int,
+    ) -> str | None:
         """
-        Main agentic loop.
-        Sends task to Grok → gets tool_calls → dispatches sub-agents → loops back.
+        Запускает agentic loop с одним провайдером.
+        Возвращает результат или None если провайдер вернул 429.
         """
-        log.info("Starting week %d for niche '%s'", week, niche_key)
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        messages = list(initial_messages)  # копия, чтобы не мутировать оригинал
 
-        goal_text = ", ".join(business_goals)
-        user_message = (
-            f"Week: {week}\n"
-            f"Niche: {niche_key}\n"
-            f"Business goals: {goal_text}\n\n"
-            "Please coordinate all sub-agents to produce this week's content plan and assets."
-        )
-
-        messages: list[ChatCompletionMessageParam] = [
-            {"role": "system", "content": self.SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ]
-
-        # Agentic loop: keep calling until no more tool_calls
-        for iteration in range(10):  # safety cap
+        for iteration in range(10):
             try:
-                response = self.client.chat.completions.create(
-                    model=settings.GROK_MODEL,
+                response = client.chat.completions.create(
+                    model=model,
                     messages=messages,
                     tools=CHIEF_TOOLS,
                     tool_choice="auto",
-                    parallel_tool_calls=False,
                     max_tokens=2048,
                 )
             except Exception as exc:
                 exc_str = str(exc)
-                # Auto-retry on rate limit
                 if "rate_limit_exceeded" in exc_str or "429" in exc_str:
-                    wait = 60  # default
-                    m = re.search(r"try again in (\d+)m(\d+)", exc_str)
-                    if m:
-                        wait = int(m.group(1)) * 60 + int(m.group(2)) + 5
-                    else:
-                        m2 = re.search(r"try again in ([\d.]+)s", exc_str)
-                        if m2:
-                            wait = int(float(m2.group(1))) + 5
-                    log.warning("Rate limit — sleeping %ds before retry...", wait)
-                    set_rate_limit_hit("ChiefAgent", wait, exc_str)
-                    time.sleep(wait)
-                    set_rate_limit_ok("ChiefAgent")
-                    continue  # retry same iteration
-                log.error("Chief API call failed at iteration %d: %s", iteration, exc)
-                break
+                    wait = _parse_wait(exc_str)
+                    log.warning(
+                        "ChiefAgent [%s] rate limit — переключаемся на следующий провайдер (ждать %ds)",
+                        provider_name, wait,
+                    )
+                    set_rate_limit_hit("ChiefAgent", wait, exc_str, provider=provider_name)
+                    return None  # сигнал: переключиться на следующий провайдер
+                log.error("ChiefAgent [%s] ошибка на итерации %d: %s", provider_name, iteration, exc)
+                raise
 
             assistant_msg = response.choices[0].message
 
-            # Build assistant dict preserving tool_calls correctly
             asst_dict: dict[str, Any] = {"role": "assistant", "content": assistant_msg.content or ""}
             if assistant_msg.tool_calls:
                 asst_dict["tool_calls"] = [tc.model_dump() for tc in assistant_msg.tool_calls]
             messages.append(asst_dict)  # type: ignore[arg-type]
 
-            # No more tool calls → final answer
             if not assistant_msg.tool_calls:
-                log.info("Loop finished after %d iteration(s)", iteration + 1)
+                set_rate_limit_ok("ChiefAgent", provider=provider_name)
+                if provider_name != self._providers[0][0]:
+                    log.info("ChiefAgent использует фаллбек-провайдер: %s", provider_name)
+                log.info("ChiefAgent loop завершён за %d итераций (%s)", iteration + 1, provider_name)
                 return assistant_msg.content or "(no summary)"
 
-            # Dispatch each tool call
             for tc in assistant_msg.tool_calls:
                 fn_name = tc.function.name
                 fn_args = json.loads(tc.function.arguments)
                 log.info("→ delegating to %s(%s)", fn_name, list(fn_args.keys()))
-
                 try:
                     result = _dispatch(fn_name, fn_args, week=week)
                 except Exception as exc:
                     log.error("Sub-agent %s failed: %s", fn_name, exc)
                     result = f"ERROR: {exc}"
-
-                # Feed result back as tool message
                 messages.append({  # type: ignore[arg-type]
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": result[:3000],  # trim if huge
+                    "content": result[:3000],
                 })
 
         return "(chief loop limit reached)"
+
+    def run_week(self, week: int, niche_key: str, business_goals: list[str]) -> str:
+        log.info("Starting week %d for niche '%s'", week, niche_key)
+
+        goal_text = ", ".join(business_goals)
+        initial_messages: list[ChatCompletionMessageParam] = [
+            {"role": "system", "content": self.SYSTEM_PROMPT},
+            {"role": "user", "content": (
+                f"Week: {week}\nNiche: {niche_key}\nBusiness goals: {goal_text}\n\n"
+                "Please coordinate all sub-agents to produce this week's content plan and assets."
+            )},
+        ]
+
+        for attempt in range(5):
+            for provider_name, api_key, base_url, model in self._providers:
+                result = self._try_provider(
+                    provider_name, api_key, base_url, model, initial_messages, week
+                )
+                if result is not None:
+                    return result
+                # rate limit — пробуем следующий провайдер
+
+            # Все провайдеры исчерпаны — ждём сброса
+            log.warning("ChiefAgent: все провайдеры в лимите, ждём 60с (попытка %d/5)...", attempt + 1)
+            time.sleep(60)
+
+        raise RuntimeError("ChiefAgent: все провайдеры исчерпали лимит после 5 попыток")

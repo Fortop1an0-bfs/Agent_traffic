@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
@@ -115,6 +116,14 @@ def publish_to_channel(content_id: int) -> bool:
         await bot.session.close()
 
     asyncio.run(_post())
+
+    # Пометить как опубликованный
+    with get_session() as session:
+        item = session.get(ContentItemDB, content_id)
+        if item:
+            item.published_at = datetime.utcnow()
+            session.commit()
+
     log.info("Опубликовано %d постов в канал '%s' (content_id=%d)", len(posts), niche_key, content_id)
     return True
 

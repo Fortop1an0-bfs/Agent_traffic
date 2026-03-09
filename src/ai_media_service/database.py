@@ -30,9 +30,15 @@ def wait_for_db(retries: int = 15, delay: float = 2.0) -> None:
 
 
 def init_db() -> None:
-    """Wait for DB, then create all tables."""
+    """Wait for DB, then create all tables and apply safe migrations."""
     wait_for_db()
     Base.metadata.create_all(engine)
+    # Safe migrations: add new columns that may not exist yet
+    with engine.connect() as conn:
+        conn.execute(text(
+            "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS published_at TIMESTAMP"
+        ))
+        conn.commit()
     log.info("DB tables created/verified.")
 
 

@@ -32,6 +32,7 @@ class ContentItemDB(Base):
     qa_status: Mapped[str] = mapped_column(String, default="pending")
     qa_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class WeeklyMetricsDB(Base):
