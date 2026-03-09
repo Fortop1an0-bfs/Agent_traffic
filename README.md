@@ -1,37 +1,231 @@
-# AI Media Service MVP
+# AI Media Service
 
-MVP service that uses a chief AI agent to coordinate specialized sub-agents for:
+Автономный AI-агент для ведения трёх Telegram-каналов на русском языке.
+Система сама генерирует контент, отправляет его на проверку и публикует после одобрения.
 
-- Website content
-- Telegram channel
-- Short videos for TikTok / Reels / Shorts
+---
 
-## What is implemented
+## Что делает проект
 
-- Agent role registry with inputs/outputs/KPIs
-- 10 niche directions with unified multi-channel model
-- Pilot niche selection and 4-week content strategy
-- Content pipeline with templates and QA checks
-- Metrics collection and weekly decision loop dashboard
-- 8-week MVP sprint plan with A/B tests and scaling gates
-- Runnable CLI demo
+Каждый будний день в 08:30 система автоматически:
 
-## Quick start
+1. Выбирает нишу по расписанию (пн/чт → AI бизнес, вт/пт → Личный бренд, ср/сб → Финансы)
+2. Запускает цепочку агентов: анализ → стратегия → генерация контента → QA
+3. Отправляет готовый контент тебе в Telegram с кнопками **✅ Approve / ❌ Reject**
+4. После нажатия Approve — автоматически публикует посты в нужный канал
 
-1. Use Python 3.11+.
-2. Run:
+В 10:00, 15:00 и 19:00 система проверяет очередь одобренных постов и публикует следующий.
 
-```bash
-python -m src.ai_media_service.cli
+---
+
+## Telegram-каналы
+
+| Ниша | Канал | Темы |
+|------|-------|------|
+| `ai_business` | Нейро Бизнес | AI-инструменты, автоматизация, кейсы, промпты |
+| `personal_brand` | Виден всем | Рост аудитории, упаковка, монетизация |
+| `finance` | Деньги просто | Бюджет, накопления, инвестиции |
+
+---
+
+## Агенты
+
+### ChiefAgent — главный оркестратор
+Мозг системы. Получает задачу на неделю, решает что и в каком порядке делать,
+раздаёт задания субагентам и собирает итоговый результат.
+Использует function calling для управления остальными агентами.
+**Провайдеры:** Groq (llama-3.3-70b) → Gemini → Mistral (автопереключение при rate limit)
+
+---
+
+### NicheAnalystAgent — аналитик ниши
+Изучает рынок перед созданием контента.
+**Что делает:** находит топ-3 тренда в нише прямо сейчас, выявляет боли аудитории,
+ищет контент-возможности с высоким потенциалом.
+**Результат:** аналитический отчёт для стратега.
+
+---
+
+### ContentStrategyAgent — контент-стратег
+Превращает аналитику в конкретный план.
+**Что делает:** составляет 4 темы на неделю с форматом (статья/пост/шортс),
+эмоцией (страх/любопытство/польза) и хуком для каждой.
+**Результат:** контент-план на неделю.
+
+---
+
+### ContentGeneratorAgent — автор контента
+Пишет весь контент по одной теме сразу в трёх форматах.
+**Что делает:**
+- **Статья** (700–1000 слов): заголовок → боль читателя → решение → CTA
+- **3 Telegram-поста**: инсайт, мини-кейс, чеклист — каждый с хуком и призывом
+- **3 сценария Shorts** (15–45 сек): хайп → суть → призыв подписаться
+
+**Результат:** готовый контент, который сохраняется в БД и уходит на проверку.
+
+---
+
+### QABrandSafetyAgent — редактор и модератор
+Проверяет контент перед тем как он попадёт к тебе на апрув.
+**Что проверяет:** фактология (нет ли непроверенных цифр), безопасность (нет ли запрещённого в РФ),
+наличие CTA, читаемость для обычного человека.
+**Результат:** JSON со статусом pass/fail, списком проблем и рекомендациями.
+
+---
+
+### GrowthMetricsAgent — аналитик роста
+Анализирует метрики канала и принимает решения на следующую неделю.
+**Что делает:** оценивает охват, ER, CTR — что оставить, что убрать,
+предлагает 2 гипотезы для A/B теста, даёт рекомендацию по частоте постов.
+**Результат:** отчёт с решениями для следующего цикла.
+
+---
+
+### SeoAgent — SEO-специалист
+Оптимизирует статьи для поиска в Яндексе и Google.
+**Что делает:** подбирает высокочастотный ключ, 5 LSI-запросов,
+пишет мета-заголовок (до 60 символов) и мета-описание (до 155 символов), структуру H1–H3.
+
+---
+
+### TelegramEditorAgent — редактор канала
+Адаптирует любую идею в Telegram-формат.
+**Что делает:** хук в первой строке, живой разговорный язык, умеренные эмодзи,
+CTA в конце, максимум 180 слов. Придумывает вопрос для опроса по теме.
+
+---
+
+### ShortsScriptAgent — сценарист коротких видео
+Пишет сценарии для Reels/Shorts/TikTok (20–40 сек при озвучке).
+**Структура каждого:** ХАЙП (0–3 сек) → СУТЬ (3–35 сек) → ПРИЗЫВ (последние 5 сек).
+Тон: дерзкий, прямой, без воды.
+
+---
+
+## Как работает система
+
+```
+Celery Beat (расписание)
+        │
+        ▼
+generate_daily_content (пн-пт 08:30)
+        │
+        ▼
+   ChiefAgent (Groq / Gemini / Mistral)
+        │
+        ├─► NicheAnalystAgent  ──► анализ рынка
+        ├─► ContentStrategyAgent ► план на неделю
+        ├─► ContentGeneratorAgent ► статья + посты + шортсы
+        └─► QABrandSafetyAgent  ── проверка контента
+                │
+                ▼
+        ContentItemDB (PostgreSQL)
+                │
+                ▼
+        notify_admin() — уведомление в Telegram с кнопками
+                │
+          ┌─────┴─────┐
+          ▼           ▼
+       Approve      Reject
+          │
+          ▼
+   Очередь на публикацию
+          │
+          ▼
+publish_next_post (10:00 / 15:00 / 19:00)
+          │
+          ▼
+   Пост в Telegram-канал ✅
 ```
 
-## Project layout
+---
 
-- `src/ai_media_service/roles.py` - chief and sub-agent role definitions
-- `src/ai_media_service/niches.py` - 10 niche catalog + pilot picker
-- `src/ai_media_service/strategy.py` - 4-week strategy builder
-- `src/ai_media_service/pipeline.py` - repurposing and QA flow
-- `src/ai_media_service/metrics.py` - KPI, A/B tests, weekly report
-- `src/ai_media_service/mvp.py` - 8-week rollout model and readiness gates
-- `src/ai_media_service/orchestrator.py` - chief-agent coordination logic
-- `src/ai_media_service/cli.py` - end-to-end MVP scenario
+## Провайдеры LLM и фаллбек
+
+Все агенты автоматически переключаются при rate limit — без sleep, мгновенно:
+
+| Приоритет | Провайдер | Модель | Лимит |
+|-----------|-----------|--------|-------|
+| 1 (primary) | Google Gemini | gemini-2.0-flash | 1M токенов/день бесплатно |
+| 2 (fallback) | Mistral | mistral-small-latest | бесплатный тир |
+| 3 (fallback) | Groq | llama-3.3-70b-versatile | 100K токенов/день |
+
+**ChiefAgent** использует тот же порядок: Groq → Gemini → Mistral
+(Groq стоит первым для ChiefAgent т.к. лучше поддерживает function calling)
+
+---
+
+## Инфраструктура
+
+```
+docker compose up --build -d
+```
+
+| Контейнер | Назначение |
+|-----------|-----------|
+| `app` | Основное приложение |
+| `dashboard` | Веб-дашборд http://localhost:8000 |
+| `celery_worker` | Выполняет задачи агентов |
+| `celery_beat` | Планировщик расписания |
+| `telegram_bot` | Бот для апрува контента |
+| `postgres` | База данных (контент, задачи, метрики) |
+| `redis` | Брокер задач + кэш rate limit |
+
+---
+
+## Быстрый старт на новой машине
+
+```bash
+git clone https://github.com/Fortop1an0-bfs/Agent_traffic.git
+cd Agent_traffic
+
+# Создай .env с API ключами (скопируй структуру из .env.example если есть)
+# Обязательные переменные:
+# GROK_API_KEY, GOOGLE_API_KEY, MISTRAL_API_KEY
+# DATABASE_URL, REDIS_URL
+# TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID
+# TELEGRAM_CHANNEL_AI_BUSINESS, TELEGRAM_CHANNEL_PERSONAL_BRAND, TELEGRAM_CHANNEL_FINANCE
+
+bash start.sh
+```
+
+---
+
+## Ручной запуск задач
+
+```bash
+# Сгенерировать контент прямо сейчас (нише по дню недели)
+docker exec agent_traffic_worker celery -A src.ai_media_service.worker call \
+  src.ai_media_service.worker.generate_daily_content
+
+# Запустить конкретную нишу
+docker exec agent_traffic_worker celery -A src.ai_media_service.worker call \
+  src.ai_media_service.worker.run_single_niche --args='["ai_business", 1]'
+
+# Опубликовать следующий одобренный пост
+docker exec agent_traffic_worker celery -A src.ai_media_service.worker call \
+  src.ai_media_service.worker.publish_next_post
+```
+
+---
+
+## Структура проекта
+
+```
+src/ai_media_service/
+├── agents/
+│   ├── chief.py          # ChiefAgent — оркестратор с function calling
+│   ├── sub_agents.py     # Все субагенты (8 штук)
+│   └── base.py           # BaseAgent с фаллбек-цепочкой провайдеров
+├── dashboard/
+│   ├── app.py            # FastAPI дашборд
+│   └── static/index.html # UI с канбан-доской и rate limit виджетами
+├── integrations/
+│   └── telegram_bot.py   # Бот: апрув контента + публикация в каналы
+├── config.py             # Настройки (API ключи, модели, каналы)
+├── db_models.py          # SQLAlchemy модели (контент, задачи, метрики)
+├── database.py           # Подключение к БД + миграции
+├── redis_client.py       # Очередь задач + кэш rate limit по провайдерам
+├── worker.py             # Celery задачи + beat расписание
+└── niches.py             # Каталог ниш
+```
