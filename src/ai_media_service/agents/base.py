@@ -54,6 +54,8 @@ class BaseAgent:
 
     name: str = "BaseAgent"
     system_prompt: str = "You are a helpful AI agent."
+    _max_tokens: int = 2048
+    _temperature: float = 0.7
 
     # Subclasses override these to use a different primary provider
     _api_key_attr: str = "GROK_API_KEY"
@@ -106,8 +108,8 @@ class BaseAgent:
                     response = client.chat.completions.create(
                         model=model,
                         messages=messages,
-                        max_tokens=2048,
-                        temperature=0.7,
+                        max_tokens=self._max_tokens,
+                        temperature=self._temperature,
                     )
                     set_rate_limit_ok(self.name, provider=provider_name)
                     if provider_name != self._primary[0]:

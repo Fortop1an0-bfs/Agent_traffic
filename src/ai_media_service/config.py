@@ -30,6 +30,10 @@ class Settings:
     OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
 
+    # ── Tavily (web search для NicheAnalystAgent) ─────────────────────────────
+    # Ключ: https://app.tavily.com  (бесплатно: 1000 запросов/мес)
+    TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+
     DATABASE_URL: str = os.environ["DATABASE_URL"]
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 

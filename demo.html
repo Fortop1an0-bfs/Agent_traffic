@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Media Service — Interactive Demo</title>
+<style>
+:root{
+  --bg:#080c10;--card:#0f1923;--border:#1e2d3d;
+  --primary:#00d488;--accent:#00a8ff;--warn:#f59e0b;
+  --danger:#ef4444;--text:#e2e8f0;--muted:#64748b;--sidebar:220px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
+#sidebar{width:var(--sidebar);background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.logo{padding:20px 16px;border-bottom:1px solid var(--border)}
+.logo h2{font-size:14px;color:var(--primary);font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.logo p{font-size:11px;color:var(--muted);margin-top:2px}
+nav{padding:12px 0;flex:1}
+nav a{display:flex;align-items:center;gap:10px;padding:10px 16px;color:var(--muted);text-decoration:none;font-size:13px;cursor:pointer;transition:all .2s;border-left:3px solid transparent}
+nav a:hover{color:var(--text);background:rgba(255,255,255,.04)}
+nav a.active{color:var(--primary);background:rgba(0,212,136,.07);border-left-color:var(--primary)}
+nav a .icon{font-size:16px;width:20px;text-align:center}
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
+.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--primary);box-shadow:0 0 6px var(--primary);margin-right:6px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#main{flex:1;overflow-y:auto;padding:24px}
+.section{display:none}
+.section.active{display:block}
+.section-header{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.section-header h1{font-size:22px;font-weight:700}
+.badge{font-size:11px;padding:3px 8px;border-radius:20px;background:rgba(0,212,136,.15);color:var(--primary);border:1px solid rgba(0,212,136,.3)}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.stat-card .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.stat-card .value{font-size:28px;font-weight:700;color:var(--primary)}
+.stat-card .delta{font-size:12px;color:#22c55e;margin-top:4px}
+.stat-card .delta.neg{color:var(--danger)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:20px}
+.card h3{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px}
+.pipeline-steps{display:flex;gap:0;margin:20px 0;overflow-x:auto}
+.pipe-step{flex:1;min-width:110px;text-align:center;position:relative}
+.pipe-step:not(:last-child)::after{content:'';position:absolute;top:22px;left:54px;right:-1px;width:calc(100% - 54px);height:2px;background:var(--border);z-index:0;transition:background .4s}
+.pipe-step.done:not(:last-child)::after{background:var(--primary)}
+.pipe-step.running:not(:last-child)::after{background:var(--warn)}
+.pipe-icon{width:44px;height:44px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 8px;border:2px solid var(--border);position:relative;z-index:1;transition:all .4s}
+.pipe-step.done .pipe-icon{background:rgba(0,212,136,.2);border-color:var(--primary);box-shadow:0 0 12px rgba(0,212,136,.3)}
+.pipe-step.running .pipe-icon{background:rgba(245,158,11,.15);border-color:var(--warn);animation:spin 1s linear infinite}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.pipe-step .pipe-name{font-size:11px;color:var(--muted);margin-bottom:3px}
+.pipe-step.done .pipe-name{color:var(--primary)}
+.pipe-step.running .pipe-name{color:var(--warn)}
+.pipe-step .pipe-model{font-size:10px;color:var(--muted);opacity:.7}
+.pipe-step.done .pipe-model{opacity:1;color:var(--primary)}
+.progress-bar{height:4px;background:var(--border);border-radius:2px;margin:16px 0 20px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:2px;width:0%;transition:width .5s ease}
+.agents-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.agent-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;transition:border-color .2s}
+.agent-card:hover{border-color:rgba(0,212,136,.4)}
+.agent-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.agent-icon{width:40px;height:40px;border-radius:10px;background:rgba(0,212,136,.12);display:flex;align-items:center;justify-content:center;font-size:20px}
+.agent-name{font-size:14px;font-weight:600}
+.agent-provider{font-size:11px;color:var(--muted);margin-top:2px}
+.agent-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px}
+.agent-badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(0,212,136,.1);color:var(--primary);border:1px solid rgba(0,212,136,.2);margin-right:4px;margin-bottom:4px}
+.agent-badge.groq{background:rgba(0,168,255,.1);color:var(--accent);border-color:rgba(0,168,255,.2)}
+.agent-badge.gemini{background:rgba(139,92,246,.1);color:#8b5cf6;border-color:rgba(139,92,246,.2)}
+.agent-badge.telegram{background:rgba(0,168,255,.1);color:var(--accent);border-color:rgba(0,168,255,.2)}
+.kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.kanban-col{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;padding:16px;min-height:300px}
+.kanban-col-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.kanban-col-header h4{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.kanban-count{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700}
+.content-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;transition:border-color .2s}
+.content-card:hover{border-color:rgba(0,212,136,.3)}
+.niche-tag{font-size:10px;padding:2px 6px;border-radius:6px;display:inline-block;margin-bottom:6px}
+.topic{font-size:13px;font-weight:600;margin-bottom:6px;line-height:1.4}
+.preview{font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:10px}
+.card-actions{display:flex;gap:6px;flex-wrap:wrap}
+.btn{padding:5px 12px;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600;transition:all .2s}
+.btn-approve{background:rgba(0,212,136,.15);color:var(--primary);border:1px solid rgba(0,212,136,.3)}
+.btn-approve:hover{background:rgba(0,212,136,.3)}
+.btn-reject{background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.2)}
+.btn-reject:hover{background:rgba(239,68,68,.2)}
+.btn-publish{background:var(--primary);color:#000;border:none}
+.btn-publish:hover{opacity:.85}
+.btn-primary{background:var(--primary);color:#000;border:none;padding:8px 18px;font-size:13px;border-radius:8px;cursor:pointer;font-weight:700}
+.btn-primary:hover{opacity:.85}
+.channels-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.channel-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px}
+.channel-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.channel-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px}
+.channel-name{font-size:15px;font-weight:700}
+.channel-handle{font-size:12px;color:var(--muted)}
+.channel-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.ch-stat{background:rgba(255,255,255,.03);border-radius:8px;padding:10px;text-align:center}
+.ch-stat .v{font-size:20px;font-weight:700}
+.ch-stat .l{font-size:10px;color:var(--muted);margin-top:2px}
+.last-post{margin-top:14px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;font-size:11px;color:var(--muted);line-height:1.5}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.metric-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px}
+.metric-card h3{font-size:14px;font-weight:600;margin-bottom:16px}
+.bar-chart{display:flex;flex-direction:column;gap:10px}
+.bar-row{display:flex;align-items:center;gap:10px}
+.bar-label{font-size:11px;color:var(--muted);width:85px;text-align:right;flex-shrink:0}
+.bar-track{flex:1;height:20px;background:var(--border);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;width:0%;transition:width 1.2s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:6px}
+.bar-fill span{font-size:10px;font-weight:700;color:#000}
+.chat-container{display:flex;flex-direction:column;height:520px;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:76%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5}
+.msg.user{align-self:flex-end;background:rgba(0,212,136,.18);border:1px solid rgba(0,212,136,.3)}
+.msg.bot{align-self:flex-start;background:rgba(255,255,255,.06);border:1px solid var(--border)}
+.bot-label{font-size:10px;color:var(--primary);font-weight:700;margin-bottom:4px}
+.chat-input{display:flex;padding:12px;border-top:1px solid var(--border);gap:10px}
+.chat-input input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none}
+.chat-input input:focus{border-color:var(--primary)}
+.chat-input button{background:var(--primary);color:#000;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer;font-size:13px}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--primary);color:#000;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;transform:translateY(100px);opacity:0;transition:all .3s;z-index:1000}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.reject{background:var(--danger);color:#fff}
+select{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:8px;font-size:13px;outline:none;cursor:pointer}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="logo">
+    <h2>AI Media Service</h2>
+    <p>Autonomous Content System</p>
+  </div>
+  <nav id="nav">
+    <a class="active" onclick="showSection('dashboard')" data-s="dashboard"><span class="icon">📊</span>Dashboard</a>
+    <a onclick="showSection('pipeline')" data-s="pipeline"><span class="icon">⚡</span>Pipeline</a>
+    <a onclick="showSection('agents')" data-s="agents"><span class="icon">🤖</span>Agents</a>
+    <a onclick="showSection('content')" data-s="content"><span class="icon">📝</span>Content</a>
+    <a onclick="showSection('channels')" data-s="channels"><span class="icon">📢</span>Channels</a>
+    <a onclick="showSection('metrics')" data-s="metrics"><span class="icon">📈</span>Metrics</a>
+    <a onclick="showSection('chat')" data-s="chat"><span class="icon">💬</span>AI Chat</a>
+  </nav>
+  <div class="sidebar-footer">
+    <span class="status-dot"></span>System online · v1.0
+  </div>
+</div>
+
+<div id="main">
+
+  <!-- DASHBOARD -->
+  <div class="section active" id="s-dashboard">
+    <div class="section-header">
+      <h1>Dashboard</h1>
+      <span class="badge">Live</span>
+    </div>
+    <div class="stats-grid" id="dash-stats"></div>
+    <div class="card">
+      <h3>Last Pipeline Run</h3>
+      <div id="dash-pipeline"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card">
+        <h3>Recent Agent Tasks</h3>
+        <div id="dash-tasks"></div>
+      </div>
+      <div class="card">
+        <h3>Content Queue</h3>
+        <div id="dash-queue"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIPELINE -->
+  <div class="section" id="s-pipeline">
+    <div class="section-header">
+      <h1>Pipeline Simulation</h1>
+      <span class="badge">Interactive</span>
+    </div>
+    <div class="card">
+      <h3>Content Generation Pipeline</h3>
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:4px">
+        <select id="pipe-niche">
+          <option value="ai_business">AI в бизнесе</option>
+          <option value="fin_freedom">Финансовая независимость</option>
+          <option value="it_career">IT-карьера</option>
+        </select>
+        <button class="btn-primary" onclick="runPipeline()">▶ Run Pipeline</button>
+        <span id="pipe-status" style="font-size:12px;color:var(--muted)">Ready</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="pipe-progress"></div></div>
+      <div class="pipeline-steps" id="pipe-steps"></div>
+    </div>
+    <div class="card" id="pipe-output" style="display:none">
+      <h3>Generated Output</h3>
+      <div id="pipe-result"></div>
+    </div>
+  </div>
+
+  <!-- AGENTS -->
+  <div class="section" id="s-agents">
+    <div class="section-header">
+      <h1>Agents</h1>
+      <span class="badge">8 Active</span>
+    </div>
+    <div class="agents-grid" id="agents-grid"></div>
+  </div>
+
+  <!-- CONTENT KANBAN -->
+  <div class="section" id="s-content">
+    <div class="section-header">
+      <h1>Content Board</h1>
+      <span class="badge">Kanban</span>
+    </div>
+    <div class="kanban" id="kanban-board"></div>
+  </div>
+
+  <!-- CHANNELS -->
+  <div class="section" id="s-channels">
+    <div class="section-header">
+      <h1>Telegram Channels</h1>
+      <span class="badge">3 Channels</span>
+    </div>
+    <div class="channels-grid" id="channels-grid"></div>
+  </div>
+
+  <!-- METRICS -->
+  <div class="section" id="s-metrics">
+    <div class="section-header">
+      <h1>Weekly Metrics</h1>
+      <span class="badge">Analytics</span>
+    </div>
+    <div class="metrics-grid" id="metrics-grid"></div>
+  </div>
+
+  <!-- AI CHAT -->
+  <div class="section" id="s-chat">
+    <div class="section-header">
+      <h1>AI Assistant</h1>
+      <span class="badge">Chat</span>
+    </div>
+    <div class="chat-container">
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg bot">
+          <div class="bot-label">🤖 ChiefAgent</div>
+          Привет! Я главный агент системы AI Media Service. Управляю 8 агентами и тремя Telegram-каналами. Спроси меня про агентов, pipeline, контент, метрики или архитектуру системы.
+        </div>
+      </div>
+      <div class="chat-input">
+        <input type="text" id="chat-in" placeholder="Спросите что-нибудь про систему..." onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()">Отправить</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────
+
+const AGENTS = [
+  {
+    name: "ChiefAgent",
+    icon: "🎯",
+    provider: "Groq",
+    model: "Llama 3.3 70B",
+    type: "groq",
+    desc: "Главный оркестратор. Планирует недельную стратегию, вызывает субагентов через function-calling, контролирует весь pipeline от анализа до публикации.",
+    tags: ["Orchestrator", "Tool Calling"]
+  },
+  {
+    name: "NicheAnalystAgent",
+    icon: "🔍",
+    provider: "Groq + Tavily",
+    model: "Llama 3.3 70B",
+    type: "groq",
+    desc: "Анализирует тренды ниши через поиск Tavily. Изучает конкурентов, находит горячие темы и формирует аналитический отчёт для стратега.",
+    tags: ["Research", "Web Search"]
+  },
+  {
+    name: "ContentStrategyAgent",
+    icon: "📋",
+    provider: "Groq",
+    model: "Llama 3.3 70B",
+    type: "groq",
+    desc: "Планирует 5 тем на неделю по данным аналитики. Создаёт бриф для каждой темы с целевой аудиторией, форматом и ключевым посылом.",
+    tags: ["Strategy", "Planning"]
+  },
+  {
+    name: "ContentGeneratorAgent",
+    icon: "✍️",
+    provider: "Gemini",
+    model: "Flash 2.0",
+    type: "gemini",
+    desc: "Генерирует полный контент-пакет: статья для сайта, один большой Telegram-пост 300-400 слов, 3 сценария для YouTube Shorts.",
+    tags: ["Generation", "Multi-format"]
+  },
+  {
+    name: "QABrandSafetyAgent",
+    icon: "🛡️",
+    provider: "Gemini",
+    model: "Flash 2.0",
+    type: "gemini",
+    desc: "Проверяет контент на качество и безопасность бренда. Отклоняет кликбейт, выдуманные факты, первое лицо и нарушения tone-of-voice.",
+    tags: ["QA", "Safety"]
+  },
+  {
+    name: "TelegramPublisherAgent",
+    icon: "📤",
+    provider: "Telegram",
+    model: "Bot API",
+    type: "telegram",
+    desc: "Публикует одобренный контент в Telegram-каналы по расписанию через Celery Beat: 10:00, 15:00 и 19:00 по московскому времени.",
+    tags: ["Publishing", "Scheduler"]
+  },
+  {
+    name: "MetricsAnalystAgent",
+    icon: "📊",
+    provider: "Groq",
+    model: "Llama 3.3 70B",
+    type: "groq",
+    desc: "Еженедельно собирает метрики каналов: просмотры, охват, retention, CTR. Генерирует отчёт с конкретными рекомендациями по улучшению.",
+    tags: ["Analytics", "Reporting"]
+  },
+  {
+    name: "VideoScriptAgent",
+    icon: "🎬",
+    provider: "Groq",
+    model: "Llama 3.3 70B",
+    type: "groq",
+    desc: "Создаёт детальные сценарии для YouTube Shorts и TikTok: хук в первые 3 секунды, основная часть, сильный CTA. До 60 секунд.",
+    tags: ["Video", "Scripts"]
+  }
+];
+
+const NICHES = {
+  ai_business: { name: "AI в бизнесе",              color: "#00d488", emoji: "🤖" },
+  fin_freedom:  { name: "Финансовая независимость",  color: "#f59e0b", emoji: "💰" },
+  it_career:    { name: "IT-карьера",                color: "#00a8ff", emoji: "💻" }
+};
+
+const CONTENT = [
+  { id: 1, niche: "ai_business",  topic: "GPT-агенты автоматизируют бухгалтерию: реальные кейсы",          status: "pending",   preview: "Три компании из Москвы и Екатеринбурга сократили время на закрытие месяца с 5 дней до 8 часов, внедрив связку GPT-4 + 1С...",           created: "2025-01-13" },
+  { id: 2, niche: "fin_freedom",  topic: "ETF против ПИФов: что выбрать в 2025 году",                      status: "pending",   preview: "Комиссии российских ПИФов достигли 3.2% годовых, тогда как зарубежные ETF через СПБ биржу берут 0.07%...",                          created: "2025-01-13" },
+  { id: 3, niche: "it_career",    topic: "Senior разработчик за 3 года: ошибки и находки",                  status: "pending",   preview: "Статистика hh.ru: медиана вилки Senior в 2025 году — 350-500K руб. Но каждый четвёртый разработчик застрял на Middle...",          created: "2025-01-12" },
+  { id: 4, niche: "ai_business",  topic: "Нейросети в маркетинге: ROI реальных внедрений",                  status: "approved",  preview: "Агентство Digital First автоматизировало создание A/B-тестов через Claude API и снизило cost-per-lead на 40%...",                  created: "2025-01-11" },
+  { id: 5, niche: "fin_freedom",  topic: "Рублёвые облигации vs депозит: считаем доходность",               status: "approved",  preview: "При ставке ЦБ 21%, флоатеры ОФЗ-ПК дают до 23% годовых без риска для портфеля до 1.4M руб...",                                    created: "2025-01-10" },
+  { id: 6, niche: "it_career",    topic: "Как пройти System Design в FAANG в 2025",                         status: "published", preview: "Из 847 интервью в FAANG в 2024 году, 68% кандидатов проваливались именно на стадии System Design...",                                 created: "2025-01-09" },
+  { id: 7, niche: "ai_business",  topic: "Промпт-инжиниринг в продакшне: чеклист из 12 пунктов",           status: "published", preview: "Команда Яндекса поделилась внутренним гайдом: 12 техник, снижающих hallucination rate с 18% до 3% в боевых системах...",           created: "2025-01-08" }
+];
+
+const CHANNELS = [
+  {
+    niche: "ai_business", name: "AI в Бизнесе", handle: "@ai_biz_ru",
+    icon: "🤖", color: "#00d488",
+    subs: 12400, views_week: 48700, engagement: 8.3, posts_week: 15,
+    last_post: "GPT-агенты автоматизируют бухгалтерию: три московские компании сократили время на закрытие месяца с 5 дней до 8 часов..."
+  },
+  {
+    niche: "fin_freedom", name: "Финансовая свобода", handle: "@fin_free_ru",
+    icon: "💰", color: "#f59e0b",
+    subs: 8900, views_week: 31200, engagement: 6.7, posts_week: 12,
+    last_post: "ETF против ПИФов: комиссии российских ПИФов достигли 3.2% годовых, а зарубежные ETF через СПБ берут 0.07%..."
+  },
+  {
+    niche: "it_career", name: "IT Карьера", handle: "@it_career_ru",
+    icon: "💻", color: "#00a8ff",
+    subs: 15700, views_week: 62300, engagement: 9.1, posts_week: 18,
+    last_post: "Senior разработчик за 3 года: медиана вилки в 2025 году — 350-500K руб, каждый четвёртый застрял на Middle..."
+  }
+];
+
+const METRICS = [
+  {
+    niche: "ai_business", label: "AI в бизнесе", color: "#00d488",
+    items: [
+      { label: "Просмотры",   val: 48700,  max: 100000, fmt: "48.7K" },
+      { label: "Retention",   val: 71,     max: 100,    fmt: "71%" },
+      { label: "CTR",         val: 6.8,    max: 20,     fmt: "6.8%" },
+      { label: "Вовлечение",  val: 8.3,    max: 20,     fmt: "8.3%" },
+      { label: "Подписчики",  val: 340,    max: 1000,   fmt: "+340" }
+    ]
+  },
+  {
+    niche: "fin_freedom", label: "Финансовая свобода", color: "#f59e0b",
+    items: [
+      { label: "Просмотры",   val: 31200,  max: 100000, fmt: "31.2K" },
+      { label: "Retention",   val: 64,     max: 100,    fmt: "64%" },
+      { label: "CTR",         val: 5.2,    max: 20,     fmt: "5.2%" },
+      { label: "Вовлечение",  val: 6.7,    max: 20,     fmt: "6.7%" },
+      { label: "Подписчики",  val: 210,    max: 1000,   fmt: "+210" }
+    ]
+  },
+  {
+    niche: "it_career", label: "IT-карьера", color: "#00a8ff",
+    items: [
+      { label: "Просмотры",   val: 62300,  max: 100000, fmt: "62.3K" },
+      { label: "Retention",   val: 78,     max: 100,    fmt: "78%" },
+      { label: "CTR",         val: 8.4,    max: 20,     fmt: "8.4%" },
+      { label: "Вовлечение",  val: 9.1,    max: 20,     fmt: "9.1%" },
+      { label: "Подписчики",  val: 520,    max: 1000,   fmt: "+520" }
+    ]
+  }
+];
+
+const PIPE_STEPS = [
+  { name: "NicheAnalyst",    icon: "🔍", model: "Llama+Tavily", key: "niche"    },
+  { name: "ContentStrategy", icon: "📋", model: "Llama 3.3",    key: "strategy" },
+  { name: "ContentGen",      icon: "✍️", model: "Gemini Flash",  key: "generate" },
+  { name: "QA & Safety",     icon: "🛡️", model: "Gemini Flash",  key: "qa"       },
+  { name: "Publisher",       icon: "📤", model: "Bot API",       key: "publish"  }
+];
+
+const PIPE_OUTPUTS = {
+  ai_business: {
+    topic: "Как Claude API сократил время онбординга в SaaS на 60%",
+    telegram: "Сервис amoCRM интегрировал Claude API в воронку онбординга — и сократил время активации клиента с 14 дней до 5.\n\nReCRM, SberCRM и ещё четыре российских SaaS отчитались о схожих результатах: LLM-ассистент сопровождает нового пользователя через ключевые действия, отвечает на вопросы в контексте конкретного аккаунта и эскалирует сложные кейсы к саппорту.\n\nГлавный инсайт из разговора с product-командой amoCRM: первые два дня после регистрации — единственное окно, когда клиент готов учиться. Если за это время он не совершил три ключевых действия в продукте, вероятность оттока в течение 30 дней — 74%.\n\nClaude не просто отвечает на вопросы. Он анализирует, на каком шаге онбординга находится пользователь прямо сейчас, и предлагает следующее конкретное действие — не «изучите документацию», а «нажмите эту кнопку и вот почему».\n\nСтоимость внедрения — около 180 000 рублей разработки плюс ~15 000 руб./мес. на API. Окупаемость при оттоке 200 клиентов в месяц по 3000 руб./мес. — меньше двух месяцев.\n\nКакой продукт в вашей компании потерял бы меньше клиентов, если бы умел объяснять себя сам?",
+    shorts: [
+      "Хук: «Компания теряла 30% клиентов на онбординге — пока не добавила один чат»",
+      "Основная часть: показываем воронку до и после, цифры retention по дням",
+      "CTA: «Расскажите, на каком шаге ваши клиенты уходят чаще всего»"
+    ]
+  },
+  fin_freedom: {
+    topic: "Портфель на 100K рублей: стратегия при ставке 21%",
+    telegram: "ЦБ держит ставку 21% — и это меняет расчёт любого инвестиционного портфеля.\n\nДепозит в Сбере даёт 22% годовых. Флоатеры ОФЗ-ПК торгуются с доходностью до 23%. Корпоративные облигации первого эшелона — 24-26%. В такой ситуации акции роста с потенциалом 15-20% смотрятся откровенно слабо.\n\nМы разобрали, как выглядит рациональный портфель на 100K рублей в текущих условиях.\n\nКонсервативный вариант: 60% — флоатер ОФЗ 29024, 40% — депозит с ежемесячной капитализацией. Итого около 22.5% годовых без риска. При инфляции 8.5% — реальная доходность 14%. Это редкость для российского рынка.\n\nУмеренный вариант: 40% флоатеры + 30% корпоративные облигации Сбера/Газпрома + 30% фонд ликвидности LQDT. Доходность около 23-24%. Плюс: часть портфеля остаётся ликвидной для реагирования на изменение ставки.\n\nГлавный риск — снижение ставки. Если ЦБ перейдёт к циклу смягчения, длинные ОФЗ с фиксированным купоном дадут дополнительный прирост тела. Флоатеры при этом потеряют в доходности.\n\nКакой горизонт инвестирования у вас: до года или дольше?",
+    shorts: [
+      "Хук: «100 000 рублей в 2025: куда вложить, пока ставка 21%»",
+      "Сравнение трёх вариантов: депозит / флоатеры / корпоративные облигации",
+      "CTA: «Сохраните пост — пригодится при следующем решении ЦБ по ставке»"
+    ]
+  },
+  it_career: {
+    topic: "Staff Engineer в 2025: чем отличается от Senior и как дорасти",
+    telegram: "Яндекс, Тинькофф и VK ввели грейд Staff Engineer — и это не просто «очень Senior».\n\nВот в чём принципиальная разница, которую большинство разработчиков не понимает до первого Performance Review.\n\nSenior отвечает за качество своего кода и решает технические задачи в рамках проекта. Staff отвечает за техническое здоровье целого направления — и измеряется не в строках кода, а во влиянии на другие команды.\n\nАнализ 340 вакансий Staff Engineer на hh.ru и LinkedIn за декабрь 2024 показывает: 78% упоминают «кросс-командное взаимодействие», 65% — «техническая стратегия», и только 34% — конкретные технологии.\n\nЧто это значит на практике. Staff пишет RFC, которые принимают 5 команд. Проводит архитектурные ревью. Находит узкие места, которые никто не замечает, потому что каждая команда видит только свой кусок системы.\n\nМедиана зарплаты Staff в Яндексе и Тинькове — 550-700K руб./мес. Разрыв с Senior (350-500K) объясняется именно этим: вы продаёте уже не навыки, а leverage — способность умножать эффективность других.\n\nГде, по вашему опыту, граница между Senior и Staff размывается сильнее всего?",
+    shorts: [
+      "Хук: «Следующий шаг после Senior: чем занимается Staff Engineer на практике»",
+      "Разбор: типичная неделя, метрики успеха, влияние на несколько команд",
+      "CTA: «Напишите в комментариях — есть ли в вашей компании этот грейд»"
+    ]
+  }
+};
+
+const CHAT_RESPONSES = [
+  {
+    kw: ["агент", "chief", "главный", "оркестра"],
+    ans: "ChiefAgent — главный дирижёр системы. Работает на Groq Llama 3.3 70B. Каждое утро запускает полный pipeline: анализ ниши → стратегия → генерация → QA → публикация. Использует function-calling для управления всеми 7 субагентами."
+  },
+  {
+    kw: ["контент", "пост", "telegram", "публикац", "генерац"],
+    ans: "ContentGeneratorAgent (Gemini Flash 2.0) создаёт три типа контента за раз: статью для сайта, один большой Telegram-пост (300-400 слов) и 3 сценария для Shorts. QABrandSafetyAgent проверяет и отклоняет некачественный контент — запрет на первое лицо, выдуманные факты, клишированные заголовки."
+  },
+  {
+    kw: ["метрик", "аналитик", "просмотр", "retention", "ctr"],
+    ans: "MetricsAnalystAgent собирает данные еженедельно. Лучший канал — IT-карьера: 62.3K просмотров, retention 78%, CTR 8.4%, engagement 9.1%. Все данные хранятся в PostgreSQL и отображаются на дашборде в реальном времени."
+  },
+  {
+    kw: ["канал", "subscribe", "подписчик", "расписани"],
+    ans: "Система управляет 3 Telegram-каналами: AI в бизнесе (12.4K подписчиков), Финансовая свобода (8.9K), IT-карьера (15.7K). Публикация по расписанию через Celery Beat: 10:00, 15:00 и 19:00 по МСК."
+  },
+  {
+    kw: ["pipeline", "пайплайн", "как работает", "архитектур", "процесс"],
+    ans: "Pipeline работает так: 1) NicheAnalyst ищет тренды через Tavily Web Search, 2) ContentStrategy планирует 5 тем на неделю, 3) ContentGenerator пишет полный контент-пакет, 4) QA проверяет качество, 5) Publisher отправляет в канал. Всё автономно, без участия человека."
+  },
+  {
+    kw: ["технологи", "стек", "redis", "postgres", "celery", "fastapi"],
+    ans: "Технический стек: Python + FastAPI (дашборд), PostgreSQL (хранение контента), Redis (rate-limit трекинг), Celery+Beat (расписание), Docker Compose (деплой). LLM провайдеры: Groq (Llama 3.3 70B), Google Gemini Flash 2.0, Mistral (резерв)."
+  },
+  {
+    kw: ["fallback", "лимит", "rate", "ошибк", "провайдер"],
+    ans: "При rate-limit провайдера система мгновенно переключается: Groq → Mistral → Gemini. Никакого sleep — только instant switch. Redis хранит состояние лимитов. Если все провайдеры заняты, система делает до 5 попыток с паузой 60 секунд."
+  },
+  {
+    kw: ["groq", "gemini", "mistral", "llm", "модель", "llama"],
+    ans: "Система использует несколько LLM под разные задачи: Groq Llama 3.3 70B (быстрый оркестратор и аналитика), Gemini Flash 2.0 (генерация контента и QA), Mistral (резервный провайдер). Каждый BaseAgent содержит цепочку фаллбека."
+  },
+  {
+    kw: ["дублик", "duplicate", "похожий", "одинак", "повтор"],
+    ans: "Система проверяет дублирующиеся темы через анализ пересечения слов: если overlap >60% с темами за последние 7 дней в той же нише — тема пропускается с логом SKIPPED_DUPLICATE. Это предотвращает однотипный контент."
+  },
+  {
+    kw: ["привет", "hello", "hi", "здравствуй", "хай"],
+    ans: "Привет! Я ChiefAgent — мозг системы AI Media Service. Управляю 8 агентами и 3 Telegram-каналами. Спроси меня про архитектуру, агентов, контент, метрики или как работает pipeline!"
+  }
+];
+
+// ─────────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────────
+
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('s-' + id).classList.add('active');
+  document.querySelectorAll('#nav a').forEach(a => {
+    a.classList.toggle('active', a.dataset.s === id);
+  });
+  if (id === 'agents')   renderAgents();
+  if (id === 'content')  renderKanban();
+  if (id === 'channels') renderChannels();
+  if (id === 'metrics')  { renderMetrics(); setTimeout(animateBars, 200); }
+  if (id === 'pipeline') renderPipeSteps({});
+}
+
+// ─────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────
+
+function renderDashboard() {
+  const totalSubs  = CHANNELS.reduce((s, c) => s + c.subs, 0);
+  const totalViews = CHANNELS.reduce((s, c) => s + c.views_week, 0);
+  const pending    = CONTENT.filter(c => c.status === 'pending').length;
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card"><div class="label">Subscribers</div><div class="value">${(totalSubs/1000).toFixed(1)}K</div><div class="delta">▲ +1.07K this week</div></div>
+    <div class="stat-card"><div class="label">Weekly Views</div><div class="value">${(totalViews/1000).toFixed(0)}K</div><div class="delta">▲ +12% vs last week</div></div>
+    <div class="stat-card"><div class="label">Pending Review</div><div class="value" style="color:var(--warn)">${pending}</div><div class="delta" style="color:var(--muted)">Awaiting approval</div></div>
+    <div class="stat-card"><div class="label">Published Today</div><div class="value">4</div><div class="delta">▲ On schedule</div></div>
+    <div class="stat-card"><div class="label">Active Agents</div><div class="value">8</div><div class="delta" style="color:var(--muted)">All systems OK</div></div>
+    <div class="stat-card"><div class="label">Avg Engagement</div><div class="value">8.0%</div><div class="delta">▲ +0.3% vs last week</div></div>
+  `;
+
+  document.getElementById('dash-pipeline').innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      ${PIPE_STEPS.map((s, i) => `
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:17px">${s.icon}</span>
+          <span style="font-size:12px;color:${i < 4 ? 'var(--primary)' : 'var(--warn)'}">${s.name}</span>
+          ${i < 4 ? '<span style="font-size:10px;color:var(--primary)">✓</span>' : ''}
+        </div>
+        ${i < PIPE_STEPS.length - 1 ? '<span style="color:var(--border)">→</span>' : ''}
+      `).join('')}
+    </div>
+    <div style="font-size:12px;color:var(--muted)">Last run: Today at 10:00 МСК — <span style="color:var(--primary)">3 posts generated across 3 niches</span></div>
+  `;
+
+  const tasks = [
+    { agent: "ChiefAgent",            status: "done",    task: "Запустить pipeline для ai_business",     time: "10:03" },
+    { agent: "NicheAnalystAgent",     status: "done",    task: "Анализ трендов: AI-автоматизация",       time: "10:05" },
+    { agent: "ContentGeneratorAgent", status: "done",    task: "Генерация поста про GPT-агентов",        time: "10:08" },
+    { agent: "QABrandSafetyAgent",    status: "done",    task: "QA проверка контента #47",               time: "10:10" },
+    { agent: "TelegramPublisherAgent",status: "running", task: "Публикация в @ai_biz_ru",                time: "10:12" }
+  ];
+
+  document.getElementById('dash-tasks').innerHTML = tasks.map(t => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:12px;font-weight:600">${t.agent}</div>
+        <div style="font-size:11px;color:var(--muted)">${t.task}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:10px;color:${t.status === 'done' ? 'var(--primary)' : 'var(--warn)'}">● ${t.status}</div>
+        <div style="font-size:10px;color:var(--muted)">${t.time}</div>
+      </div>
+    </div>
+  `).join('');
+
+  const queue = contentData.filter(c => c.status === 'pending');
+  document.getElementById('dash-queue').innerHTML = queue.length ? queue.map(c => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:11px;color:${NICHES[c.niche].color}">${NICHES[c.niche].emoji} ${NICHES[c.niche].name}</div>
+      <div style="font-size:12px;font-weight:600;margin:2px 0">${c.topic}</div>
+      <div style="font-size:11px;color:var(--muted)">Created ${c.created}</div>
+    </div>
+  `).join('') : '<div style="font-size:13px;color:var(--muted);padding:8px 0">Queue is empty</div>';
+}
+
+// ─────────────────────────────────────────────
+// PIPELINE
+// ─────────────────────────────────────────────
+
+let pipeRunning = false;
+
+function renderPipeSteps(states) {
+  document.getElementById('pipe-steps').innerHTML = PIPE_STEPS.map(s => `
+    <div class="pipe-step ${states[s.key] || ''}">
+      <div class="pipe-icon">${s.icon}</div>
+      <div class="pipe-name">${s.name}</div>
+      <div class="pipe-model">${s.model}</div>
+    </div>
+  `).join('');
+}
+
+function runPipeline() {
+  if (pipeRunning) return;
+  pipeRunning = true;
+
+  const niche    = document.getElementById('pipe-niche').value;
+  const progress = document.getElementById('pipe-progress');
+  const status   = document.getElementById('pipe-status');
+  const output   = document.getElementById('pipe-output');
+
+  output.style.display = 'none';
+  status.textContent   = 'Running...';
+  progress.style.width = '0%';
+
+  const delays = [900, 1300, 2000, 1200, 800];
+  const total  = delays.reduce((a, b) => a + b, 0);
+  const states = {};
+
+  PIPE_STEPS.forEach((step, i) => {
+    const startAt = delays.slice(0, i).reduce((a, b) => a + b, 0);
+    const endAt   = startAt + delays[i];
+
+    setTimeout(() => {
+      states[step.key] = 'running';
+      renderPipeSteps(states);
+      status.textContent   = step.name + '...';
+      progress.style.width = ((startAt / total) * 100) + '%';
+    }, startAt);
+
+    setTimeout(() => {
+      states[step.key] = 'done';
+      renderPipeSteps(states);
+      progress.style.width = ((endAt / total) * 100) + '%';
+
+      if (i === PIPE_STEPS.length - 1) {
+        progress.style.width = '100%';
+        status.innerHTML     = '<span style="color:var(--primary)">✓ Completed!</span>';
+        pipeRunning          = false;
+        showPipeOutput(niche);
+        showToast('Pipeline completed! Content generated.');
+      }
+    }, endAt);
+  });
+}
+
+function showPipeOutput(niche) {
+  const out = PIPE_OUTPUTS[niche];
+  const n   = NICHES[niche];
+
+  document.getElementById('pipe-result').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
+        ${n.emoji} Generated topic for ${n.name}
+      </div>
+      <div style="font-size:17px;font-weight:700">${out.topic}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:14px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">📱 Telegram Post</div>
+        <div style="font-size:13px;line-height:1.7;color:var(--text);white-space:pre-line">${out.telegram}</div>
+      </div>
+      <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:14px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">🎬 Shorts Scripts</div>
+        ${out.shorts.map((s, i) => `
+          <div style="font-size:12px;color:var(--text);margin-bottom:8px;padding:8px;background:rgba(255,255,255,.03);border-radius:6px;line-height:1.5">
+            <span style="font-size:10px;color:${n.color};font-weight:700">Script ${i+1}</span><br>${s}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  document.getElementById('pipe-output').style.display = 'block';
+}
+
+// ─────────────────────────────────────────────
+// AGENTS
+// ─────────────────────────────────────────────
+
+function renderAgents() {
+  document.getElementById('agents-grid').innerHTML = AGENTS.map(a => `
+    <div class="agent-card">
+      <div class="agent-header">
+        <div class="agent-icon">${a.icon}</div>
+        <div>
+          <div class="agent-name">${a.name}</div>
+          <div class="agent-provider">${a.provider} · ${a.model}</div>
+        </div>
+      </div>
+      <div class="agent-desc">${a.desc}</div>
+      <div>${a.tags.map(t => `<span class="agent-badge ${a.type}">${t}</span>`).join('')}</div>
+    </div>
+  `).join('');
+}
+
+// ─────────────────────────────────────────────
+// KANBAN
+// ─────────────────────────────────────────────
+
+let contentData = JSON.parse(JSON.stringify(CONTENT));
+
+function renderKanban() {
+  const cols = [
+    { status: 'pending',   label: 'Ожидает проверки', color: 'var(--warn)'    },
+    { status: 'approved',  label: 'Одобрено',          color: 'var(--primary)' },
+    { status: 'published', label: 'Опубликовано',       color: 'var(--accent)'  }
+  ];
+
+  document.getElementById('kanban-board').innerHTML = cols.map(col => {
+    const items = contentData.filter(c => c.status === col.status);
+    return `
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <h4 style="color:${col.color}">${col.label}</h4>
+          <span class="kanban-count" style="background:${col.color}22;color:${col.color}">${items.length}</span>
+        </div>
+        ${items.map(item => {
+          const n = NICHES[item.niche];
+          return `
+            <div class="content-card">
+              <span class="niche-tag" style="background:${n.color}22;color:${n.color}">${n.emoji} ${n.name}</span>
+              <div class="topic">${item.topic}</div>
+              <div class="preview">${item.preview.substring(0, 90)}...</div>
+              <div class="card-actions">
+                ${col.status === 'pending' ? `
+                  <button class="btn btn-approve" onclick="approveContent(${item.id})">✓ Approve</button>
+                  <button class="btn btn-reject"  onclick="rejectContent(${item.id})">✗ Reject</button>
+                ` : ''}
+                ${col.status === 'approved' ? `
+                  <button class="btn btn-publish" onclick="publishContent(${item.id})">📤 Publish</button>
+                ` : ''}
+                ${col.status === 'published' ? `
+                  <span style="font-size:11px;color:var(--accent)">✓ Live in channel</span>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+        ${items.length === 0 ? `<div style="font-size:12px;color:var(--muted);text-align:center;padding:20px 0">Empty</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function approveContent(id) {
+  contentData.find(c => c.id === id).status = 'approved';
+  renderKanban();
+  renderDashboard();
+  showToast('Content approved!');
+}
+
+function rejectContent(id) {
+  contentData = contentData.filter(c => c.id !== id);
+  renderKanban();
+  renderDashboard();
+  showToast('Content rejected', true);
+}
+
+function publishContent(id) {
+  contentData.find(c => c.id === id).status = 'published';
+  renderKanban();
+  showToast('Published to Telegram channel!');
+}
+
+// ─────────────────────────────────────────────
+// CHANNELS
+// ─────────────────────────────────────────────
+
+function renderChannels() {
+  document.getElementById('channels-grid').innerHTML = CHANNELS.map(ch => `
+    <div class="channel-card">
+      <div class="channel-header">
+        <div class="channel-icon" style="background:${ch.color}22">${ch.icon}</div>
+        <div>
+          <div class="channel-name">${ch.name}</div>
+          <div class="channel-handle" style="color:${ch.color}">${ch.handle}</div>
+        </div>
+      </div>
+      <div class="channel-stats">
+        <div class="ch-stat"><div class="v" style="color:${ch.color}">${(ch.subs/1000).toFixed(1)}K</div><div class="l">Subscribers</div></div>
+        <div class="ch-stat"><div class="v" style="color:${ch.color}">${(ch.views_week/1000).toFixed(1)}K</div><div class="l">Views/week</div></div>
+        <div class="ch-stat"><div class="v" style="color:${ch.color}">${ch.engagement}%</div><div class="l">Engagement</div></div>
+        <div class="ch-stat"><div class="v" style="color:${ch.color}">${ch.posts_week}</div><div class="l">Posts/week</div></div>
+      </div>
+      <div class="last-post"><strong style="color:${ch.color}">Last post: </strong>${ch.last_post}</div>
+    </div>
+  `).join('');
+}
+
+// ─────────────────────────────────────────────
+// METRICS
+// ─────────────────────────────────────────────
+
+function renderMetrics() {
+  document.getElementById('metrics-grid').innerHTML = METRICS.map(m => `
+    <div class="metric-card">
+      <h3><span style="color:${m.color}">${m.label}</span></h3>
+      <div class="bar-chart">
+        ${m.items.map(it => `
+          <div class="bar-row">
+            <div class="bar-label">${it.label}</div>
+            <div class="bar-track">
+              <div class="bar-fill"
+                   data-pct="${((it.val / it.max) * 100).toFixed(0)}"
+                   style="background:${m.color}">
+                <span>${it.fmt}</span>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function animateBars() {
+  document.querySelectorAll('.bar-fill').forEach(b => {
+    b.style.width = b.dataset.pct + '%';
+  });
+}
+
+// ─────────────────────────────────────────────
+// CHAT
+// ─────────────────────────────────────────────
+
+function sendChat() {
+  const inp = document.getElementById('chat-in');
+  const msg = inp.value.trim();
+  if (!msg) return;
+  inp.value = '';
+
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML += `<div class="msg user">${escHtml(msg)}</div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+
+  setTimeout(() => {
+    const resp = findChatResponse(msg);
+    msgs.innerHTML += `<div class="msg bot"><div class="bot-label">🤖 ChiefAgent</div>${resp}</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 500 + Math.random() * 400);
+}
+
+function findChatResponse(msg) {
+  const lower = msg.toLowerCase();
+  for (const r of CHAT_RESPONSES) {
+    if (r.kw.some(k => lower.includes(k))) return r.ans;
+  }
+  return "Интересный вопрос! Я управляю системой автономной генерации контента для Telegram-каналов. Спроси меня про агентов, pipeline, метрики, провайдеров или конкретный канал — расскажу подробно.";
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────
+
+function showToast(msg, isReject = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = 'toast show' + (isReject ? ' reject' : '');
+  setTimeout(() => { t.className = 'toast'; }, 2500);
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+
+renderDashboard();
+renderPipeSteps({});
+</script>
+</body>
+</html>

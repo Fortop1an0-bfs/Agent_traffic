@@ -111,7 +111,11 @@ def publish_to_channel(content_id: int) -> bool:
     async def _post() -> None:
         bot = _make_bot()
         for post in posts:
-            await bot.send_message(chat_id=channel_id, text=post)
+            try:
+                await bot.send_message(chat_id=channel_id, text=post, parse_mode="Markdown")
+            except Exception:
+                # Если в тексте есть символы несовместимые с Markdown — шлём plain text
+                await bot.send_message(chat_id=channel_id, text=post)
             await asyncio.sleep(2)  # против флуд-лимита
         await bot.session.close()
 

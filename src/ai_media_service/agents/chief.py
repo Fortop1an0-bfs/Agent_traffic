@@ -18,6 +18,7 @@ from ..db_models import AgentTaskDB, ContentItemDB, WeeklyDecisionDB
 from ..redis_client import cache_agent_result, enqueue_task, set_rate_limit_hit, set_rate_limit_ok
 from .base import _parse_wait
 from ..integrations.telegram_bot import notify_admin
+from ..search import search_niche_news
 from .sub_agents import (
     ContentGeneratorAgent,
     GrowthMetricsAgent,
@@ -132,6 +133,38 @@ CHIEF_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _is_duplicate_topic(session: Any, niche_key: str, topic: str) -> bool:
+    """Return True if a similar topic was already generated in the last 7 days."""
+    from datetime import timedelta
+    if not topic:
+        return False
+    cutoff = datetime.utcnow() - timedelta(days=7)
+    # Normalize: lowercase + strip
+    topic_norm = topic.lower().strip()
+    recent = (
+        session.query(ContentItemDB)
+        .filter(
+            ContentItemDB.niche_key == niche_key,
+            ContentItemDB.created_at >= cutoff,
+        )
+        .all()
+    )
+    for item in recent:
+        existing = (item.source_idea or "").lower().strip()
+        # Simple overlap check: if >60% of words match, consider duplicate
+        words_new = set(topic_norm.split())
+        words_old = set(existing.split())
+        if not words_new:
+            continue
+        overlap = len(words_new & words_old) / len(words_new)
+        if overlap > 0.6:
+            log.info("Duplicate topic detected: '%s' ≈ '%s' (overlap=%.0f%%)", topic, item.source_idea, overlap * 100)
+            return True
+    return False
+
+
 # ── Sub-agent dispatcher ───────────────────────────────────────────────────────
 
 def _dispatch(tool_name: str, args: dict[str, Any], week: int) -> str:
@@ -148,8 +181,29 @@ def _dispatch(tool_name: str, args: dict[str, Any], week: int) -> str:
     agent = AgentClass()
 
     # Build a natural-language task from args
-    task = json.dumps(args, ensure_ascii=False)
-    result = agent.run(task)
+    if tool_name == "generate_content":
+        topic = args.get("topic", "")
+        brief = args.get("strategy_brief", "")
+        niche = args.get("niche_key", "")
+        task = (
+            f"Напиши контент для Telegram-канала по нише «{niche}».\n\n"
+            f"ТЕМА: {topic}\n\n"
+            f"БРИФ ОТ СТРАТЕГА:\n{brief}\n\n"
+            "Создай все три блока согласно инструкции: ARTICLE, TELEGRAM, SHORTS."
+        )
+    else:
+        task = json.dumps(args, ensure_ascii=False)
+
+    # For niche analysis — enrich with live web search results
+    extra_context = ""
+    if tool_name == "analyze_niche_trends":
+        niche_key = args.get("niche_key", "")
+        focus = args.get("focus_question", "")
+        extra_context = search_niche_news(niche_key, focus_question=focus)
+        if extra_context:
+            log.info("Tavily: инжектим веб-контекст для NicheAnalystAgent (%d chars)", len(extra_context))
+
+    result = agent.run(task, extra_context=extra_context)
 
     # Persist in PostgreSQL
     with get_session() as session:
@@ -169,6 +223,9 @@ def _dispatch(tool_name: str, args: dict[str, Any], week: int) -> str:
 
         # If content was generated, save it and notify admin for approval
         if tool_name == "generate_content":
+            if _is_duplicate_topic(session, args.get("niche_key", ""), args.get("topic", "")):
+                log.warning("generate_content: тема уже есть в БД за последние 7 дней, пропускаем")
+                return "SKIPPED_DUPLICATE"
             _save_content_item(session, args, result)
             session.commit()  # commit content item
             # Fetch the new item's id to notify admin
@@ -194,24 +251,30 @@ def _save_content_item(session: Any, args: dict[str, Any], raw: str) -> None:
     """Parse content generator output and store as ContentItemDB."""
     article, telegram, shorts = "", [], []
 
-    sections = raw.split("===")
-    for i, section in enumerate(sections):
-        tag = section.strip().upper()
-        if tag == "ARTICLE" and i + 1 < len(sections):
-            article = sections[i + 1].strip()
-        elif tag == "TELEGRAM" and i + 1 < len(sections):
-            blocks = [b.strip() for b in sections[i + 1].strip().split("\n\n") if b.strip()]
-            telegram = blocks
-        elif tag == "SHORTS" and i + 1 < len(sections):
-            blocks = [b.strip() for b in sections[i + 1].strip().split("\n\n") if b.strip()]
+    # Flexible split: handles === ARTICLE ===, ===ARTICLE===, == ARTICLE ==, etc.
+    parts = re.split(r"={2,}\s*(ARTICLE|TELEGRAM|SHORTS)\s*=*", raw, flags=re.IGNORECASE)
+    for i, part in enumerate(parts):
+        tag = part.strip().upper()
+        if tag == "ARTICLE" and i + 1 < len(parts):
+            article = parts[i + 1].strip()
+        elif tag == "TELEGRAM" and i + 1 < len(parts):
+            raw_tg = parts[i + 1].strip()
+            # Один большой пост — храним как список из одного элемента
+            if raw_tg:
+                telegram = [raw_tg]
+        elif tag == "SHORTS" and i + 1 < len(parts):
+            blocks = [b.strip() for b in parts[i + 1].strip().split("\n\n") if b.strip()]
             shorts = blocks
+
+    if not telegram:
+        log.warning("_save_content_item: секция TELEGRAM не найдена (%d chars raw)", len(raw))
 
     item = ContentItemDB(
         niche_key=args.get("niche_key", "unknown"),
         source_idea=args.get("topic", ""),
         website_article=article or raw,
-        telegram_posts=telegram or [raw[:200]],
-        short_video_scripts=shorts or [raw[:200]],
+        telegram_posts=telegram,
+        short_video_scripts=shorts,
         qa_status="pending",
     )
     session.add(item)
@@ -298,6 +361,12 @@ class ChiefAgent:
                     )
                     set_rate_limit_hit("ChiefAgent", wait, exc_str, provider=provider_name)
                     return None  # сигнал: переключиться на следующий провайдер
+                if "tool_use_failed" in exc_str or "failed_generation" in exc_str:
+                    log.warning(
+                        "ChiefAgent [%s] tool_call failure — переключаемся на следующий провайдер",
+                        provider_name,
+                    )
+                    return None
                 log.error("ChiefAgent [%s] ошибка на итерации %d: %s", provider_name, iteration, exc)
                 raise
 

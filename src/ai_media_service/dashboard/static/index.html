@@ -495,7 +495,7 @@ function openModal(id){
     <div class="modal-section">
       <div class="modal-section-title">📱 Telegram посты (${posts.length})</div>
       <div class="modal-posts">${posts.length
-        ?posts.map((p,i)=>`<div class="post-item"><b>Пост ${i+1}:</b>\n${escHtml(p.substring(0,300))}${p.length>300?'…':''}</div>`).join('')
+        ?posts.map((p,i)=>`<div class="post-item">${escHtml(p)}</div>`).join('')
         :'<div class="empty">Нет постов</div>'
       }</div>
     </div>

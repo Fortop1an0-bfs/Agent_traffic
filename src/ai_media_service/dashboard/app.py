@@ -70,7 +70,7 @@ def get_content(status: str | None = None, limit: int = 30) -> list[dict]:
                 "niche_key": r.niche_key,
                 "topic": r.source_idea,
                 "qa_status": r.qa_status,
-                "article_preview": r.website_article[:300],
+                "article_preview": r.website_article[:600],
                 "telegram_posts": r.telegram_posts,
                 "shorts_count": len(r.short_video_scripts or []),
                 "created_at": str(r.created_at),
