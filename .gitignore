@@ -6,3 +6,5 @@ celerybeat-schedule
 *.db
 .claude/
 .env
+
+!.secrets.7z
